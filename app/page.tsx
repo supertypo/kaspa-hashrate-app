@@ -1,4 +1,5 @@
 import Image from "next/image";
+import HashrateChart from './components/HashrateChart';
 
 export default function Home() {
   return (
@@ -49,6 +50,15 @@ export default function Home() {
           >
             Read our docs
           </a>
+        </div>
+
+        <div className="w-full max-w-7xl">
+          <h1 className="text-2xl sm:text-4xl font-bold mb-8 text-center">
+            Kaspa Network Hashrate
+          </h1>
+          <div className="bg-gray-800 rounded-lg shadow-xl p-4 sm:p-6">
+            <HashrateChart />
+          </div>
         </div>
       </main>
       <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
