@@ -91,8 +91,9 @@ export default function HashrateChart() {
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
-      mode: 'index' as const,
-      intersect: false,
+      mode: 'nearest' as const,
+      axis: 'x',
+      intersect: true,
     },
     layout: {
       padding: {
@@ -192,8 +193,8 @@ export default function HashrateChart() {
         },
       } : undefined,
       tooltip: {
-        mode: 'index' as const,
-        intersect: false,
+        mode: 'nearest' as const,
+        intersect: true,
         callbacks: {
           title: (context) => {
             const date = new Date(context[0].parsed.x);
