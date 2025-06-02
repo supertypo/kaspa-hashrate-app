@@ -109,7 +109,7 @@ export default function HashrateChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLogScale, setIsLogScale] = useState(false);
-  const [dateRange, setDateRange] = useState('7d');
+  const [dateRange, setDateRange] = useState('all');
 
   const chartOptions: ChartOptions<'line'> = {
     ...baseOptions,
@@ -222,16 +222,14 @@ export default function HashrateChart() {
     <div className="w-full h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsLogScale(!isLogScale)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              isLogScale
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-            }`}
+          <select
+            value={isLogScale ? 'logarithmic' : 'linear'}
+            onChange={(e) => setIsLogScale(e.target.value === 'logarithmic')}
+            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
           >
-            {isLogScale ? 'Logarithmic' : 'Linear'} Scale
-          </button>
+            <option value="linear">Linear Scale</option>
+            <option value="logarithmic">Logarithmic Scale</option>
+          </select>
           <select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value)}
