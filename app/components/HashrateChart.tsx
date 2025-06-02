@@ -118,6 +118,7 @@ export default function HashrateChart() {
           color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
+          maxTicksLimit: 20,
           color: '#fff',
           maxRotation: 45,
           minRotation: 45,
@@ -141,7 +142,9 @@ export default function HashrateChart() {
           callback: (tickValue: number | string) => {
             return formatHashrate(Number(tickValue));
           },
+          maxTicksLimit: 8,
           autoSkip: true,
+
         },
       },
     },
