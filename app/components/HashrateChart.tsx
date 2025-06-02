@@ -60,7 +60,7 @@ const dateRanges = [
   { label: '1 Year', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
   { label: '2 Years', value: '2y', getFn: (date: Date) => subMonths(date, 24) },
   { label: '3 Years', value: '3y', getFn: (date: Date) => subMonths(date, 36) },
-  { label: 'All', value: 'all', getFn: (date: Date) => new Date(0) }
+  { label: 'All', value: 'all', getFn: () => new Date(0) }
 ];
 
 export default function HashrateChart() {
@@ -70,7 +70,7 @@ export default function HashrateChart() {
   const [isLogScale, setIsLogScale] = useState(false);
   const [dateRange, setDateRange] = useState('all');
   const chartRef = useRef<ChartJS<"line">>(null);
-  const [zoomPlugin, setZoomPlugin] = useState<any>(null);
+  const [zoomPlugin, setZoomPlugin] = useState<typeof import('chartjs-plugin-zoom').default | null>(null);
 
   useEffect(() => {
     // Dynamically import zoom plugin on client side
@@ -123,7 +123,7 @@ export default function HashrateChart() {
           color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
-          maxTicksLimit: 8,
+          maxTicksLimit: 20,
           color: '#fff',
           maxRotation: 45,
           minRotation: 45,
