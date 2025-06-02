@@ -108,8 +108,8 @@ export default function HashrateChart() {
         time: {
           unit: 'day' as const,
           displayFormats: {
-            day: 'MMM d',
-            hour: 'MMM d, HH:mm'
+            day: 'yyyy-MM-dd',
+            hour: 'yyyy-MM-dd HH:mm'
           }
         },
         display: true,
