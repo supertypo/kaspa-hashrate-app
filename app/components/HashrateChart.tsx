@@ -17,7 +17,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
-import { format, subDays, subHours, subMonths } from 'date-fns';
+import { format, subDays, subMonths } from 'date-fns';
 
 // Register required ChartJS components
 ChartJS.register(
@@ -75,11 +75,7 @@ export default function HashrateChart() {
     });
   }, []);
 
-  const handleResetZoom = () => {
-    if (chartRef.current) {
-      chartRef.current.resetZoom();
-    }
-  };
+
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
