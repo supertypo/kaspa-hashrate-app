@@ -267,6 +267,7 @@ export default function HashrateChart() {
         backgroundColor: 'rgba(99, 102, 241, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
+        hitRadius: 30,
         fill: true,
       },
     ],
