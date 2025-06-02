@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Kaspa Network Hashrate",
   description: "Interactive visualization of Kaspa network hashrate",
+  icons: {
+    icon: "/favicon.png"
+  }
 };
 
 export default function RootLayout({
