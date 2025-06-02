@@ -106,8 +106,9 @@ export default function HashrateChart() {
       x: {
         type: 'time' as const,
         time: {
-          unit: 'hour' as const,
+          unit: 'day' as const,
           displayFormats: {
+            day: 'MMM d',
             hour: 'MMM d, HH:mm'
           }
         },
@@ -122,9 +123,11 @@ export default function HashrateChart() {
           color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
+          maxTicksLimit: 8,
           color: '#fff',
           maxRotation: 45,
-          minRotation: 45
+          minRotation: 45,
+          autoSkip: true
         },
       },
       y: {
@@ -268,14 +271,16 @@ export default function HashrateChart() {
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-4">
           <span className="text-gray-400 text-sm">Hold Shift to pan</span>
-          <select
-            value={isLogScale ? 'logarithmic' : 'linear'}
-            onChange={(e) => setIsLogScale(e.target.value === 'logarithmic')}
-            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+          <button
+            onClick={() => setIsLogScale(!isLogScale)}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              isLogScale 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+            }`}
           >
-            <option value="linear">Linear Scale</option>
-            <option value="logarithmic">Logarithmic Scale</option>
-          </select>
+            Logarithmic
+          </button>
           <div className="flex items-center gap-2">
             <select
               value={dateRange}
