@@ -51,8 +51,8 @@ function formatHashrate(hashrate: number): string {
 }
 
 const dateRanges = [
-  { label: '30 Days', value: '30d', getFn: (date: Date) => subDays(date, 30) },
-  { label: '1 Year', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
+  { label: '30d', value: '30d', getFn: (date: Date) => subDays(date, 30) },
+  { label: '1y', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
   { label: 'All', value: 'all', getFn: () => new Date(0) }
 ];
 
@@ -264,14 +264,14 @@ export default function HashrateChart() {
     <div className="w-full h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-4">
-          <span className="text-gray-400 text-sm">Hold Shift to pan</span>
+          {/* <span className="text-gray-400 text-sm">Hold Shift to pan</span> */}
           <button
             onClick={() => setIsLogScale(!isLogScale)}
             className={`text-white px-4 py-2 rounded-lg transition-colors ${
               isLogScale ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
             }`}
           >
-            Log
+            lg
           </button>
           <div className="flex items-center gap-2">
             {dateRanges.map((range) => (
