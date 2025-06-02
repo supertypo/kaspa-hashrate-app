@@ -104,6 +104,19 @@ const dateRanges = [
   { label: 'All', value: 'all', getFn: (date: Date) => new Date(0) }
 ];
 
+function formatHashrate(hashrate: number): string {
+  const units = ['KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
+  let value = hashrate;
+  let unitIndex = 0;
+
+  while (value >= 1000 && unitIndex < units.length - 1) {
+    value /= 1000;
+    unitIndex++;
+  }
+
+  return `${value.toFixed(2)} ${units[unitIndex]}`;
+}
+
 export default function HashrateChart() {
   const [data, setData] = useState<HashrateData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,7 +133,7 @@ export default function HashrateChart() {
         display: true,
         title: {
           display: true,
-          text: 'Hashrate (KH/s)',
+          text: 'Hashrate',
           color: '#fff',
           padding: { bottom: 10 }
         },
@@ -130,8 +143,7 @@ export default function HashrateChart() {
         ticks: {
           color: '#fff',
           callback: (tickValue: number | string) => {
-            const value = Number(tickValue);
-            return (value / 1e9).toFixed(2) + ' GH/s';
+            return formatHashrate(Number(tickValue));
           },
         },
       },
@@ -150,7 +162,7 @@ export default function HashrateChart() {
             const dataIndex = context.dataIndex;
             const dataPoint = data[dataIndex];
             return [
-              `Hashrate: ${(dataPoint.hashrate_kh / 1e9).toFixed(2)} GH/s`,
+              `Hashrate: ${formatHashrate(dataPoint.hashrate_kh)}`,
               `DAA Score: ${dataPoint.daaScore.toLocaleString()}`
             ];
           },
