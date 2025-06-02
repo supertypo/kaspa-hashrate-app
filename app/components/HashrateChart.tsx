@@ -62,8 +62,19 @@ export default function HashrateChart() {
   const [error, setError] = useState<string | null>(null);
   const [isLogScale, setIsLogScale] = useState(false);
   const [dateRange, setDateRange] = useState('all');
+  const [isMobile, setIsMobile] = useState(false);
   const chartRef = useRef<ChartJS<"line">>(null);
   const [zoomPlugin, setZoomPlugin] = useState<typeof import('chartjs-plugin-zoom').default | null>(null);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 640);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     // Dynamically import zoom plugin on client side
@@ -129,7 +140,7 @@ export default function HashrateChart() {
         type: isLogScale ? 'logarithmic' : 'linear',
         display: true,
         title: {
-          display: true,
+          display: !isMobile,
           text: 'Hashrate',
           color: '#fff',
           padding: { bottom: 10 }
@@ -140,11 +151,11 @@ export default function HashrateChart() {
         ticks: {
           color: '#fff',
           callback: (tickValue: number | string) => {
+            if (isMobile) return '';
             return formatHashrate(Number(tickValue));
           },
           maxTicksLimit: 8,
           autoSkip: true,
-
         },
       },
     },
