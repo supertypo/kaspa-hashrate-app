@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main className="min-h-screen w-full p-4">
       <div className="flex items-center justify-center gap-4 mb-4">
-        <img src="/kaspa-logo.svg" alt="Kaspa Logo" className="h-10 sm:h-12" />
+        <img src="/kaspa-logo.svg" alt="Kaspa Logo" className="sm:h-20" />
         <h1 className="text-2xl sm:text-4xl font-bold">
           Kaspa Network Hashrate
         </h1>
