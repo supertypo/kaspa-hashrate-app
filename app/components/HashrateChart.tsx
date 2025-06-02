@@ -107,7 +107,15 @@ export default function HashrateChart() {
         type: 'time' as const,
         time: {
           displayFormats: {
+            millisecond: 'yyyy-MM-dd HH:mm:ss.SSS',
+            second: 'yyyy-MM-dd HH:mm:ss',
+            minute: 'yyyy-MM-dd HH:mm',
+            hour: 'yyyy-MM-dd HH:mm',
             day: 'yyyy-MM-dd',
+            week: 'yyyy-MM-dd',
+            month: 'yyyy-MM-dd',
+            quarter: 'yyyy-MM-dd',
+            year: 'yyyy-MM-dd'
           }
         },
         display: true,
