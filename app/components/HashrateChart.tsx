@@ -52,14 +52,8 @@ function formatHashrate(hashrate: number): string {
 }
 
 const dateRanges = [
-  { label: '24 Hours', value: '24h', getFn: (date: Date) => subHours(date, 24) },
-  { label: '7 Days', value: '7d', getFn: (date: Date) => subDays(date, 7) },
   { label: '30 Days', value: '30d', getFn: (date: Date) => subDays(date, 30) },
-  { label: '3 Months', value: '3m', getFn: (date: Date) => subMonths(date, 3) },
-  { label: '6 Months', value: '6m', getFn: (date: Date) => subMonths(date, 6) },
   { label: '1 Year', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
-  { label: '2 Years', value: '2y', getFn: (date: Date) => subMonths(date, 24) },
-  { label: '3 Years', value: '3y', getFn: (date: Date) => subMonths(date, 36) },
   { label: 'All', value: 'all', getFn: () => new Date(0) }
 ];
 
@@ -286,27 +280,22 @@ export default function HashrateChart() {
             Log
           </button>
           <div className="flex items-center gap-2">
-            <select
-              value={dateRange}
-              onChange={(e) => {
-                setDateRange(e.target.value);
-                handleResetZoom();
-              }}
-              className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              {dateRanges.map((range) => (
-                <option key={range.value} value={range.value}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleResetZoom}
-              className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-              title="Reset Zoom"
-            >
-              Reset
-            </button>
+            {dateRanges.map((range) => (
+              <button
+                key={range.value}
+                onClick={() => {
+                  setDateRange(range.value);
+                  if (chartRef.current) {
+                    chartRef.current.resetZoom();
+                  }
+                }}
+                className={`text-white px-4 py-2 rounded-lg transition-colors ${
+                  dateRange === range.value ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
