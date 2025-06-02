@@ -159,6 +159,7 @@ export default function HashrateChart() {
         pan: {
           enabled: true,
           mode: 'x',
+          modifierKey: 'shift', // Hold shift to pan
         },
         zoom: {
           wheel: {
@@ -170,6 +171,7 @@ export default function HashrateChart() {
           mode: 'x',
           drag: {
             enabled: true,
+            modifierKey: undefined, // No modifier for zoom
             backgroundColor: 'rgba(99, 102, 241, 0.3)',
             borderColor: 'rgba(99, 102, 241, 0.8)',
           },
@@ -265,6 +267,7 @@ export default function HashrateChart() {
     <div className="w-full h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 px-2">
         <div className="flex items-center gap-4">
+          <span className="text-gray-400 text-sm">Hold Shift to pan</span>
           <select
             value={isLogScale ? 'logarithmic' : 'linear'}
             onChange={(e) => setIsLogScale(e.target.value === 'logarithmic')}
