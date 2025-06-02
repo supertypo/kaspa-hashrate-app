@@ -11,6 +11,8 @@ import {
   Tooltip,
   Legend,
   TimeScale,
+  TooltipItem,
+  ChartOptions,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
@@ -32,7 +34,7 @@ interface HashrateData {
   date_time: string;
 }
 
-const options = {
+const options: ChartOptions<'line'> = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: {
@@ -68,7 +70,8 @@ const options = {
       },
       ticks: {
         color: '#fff',
-        callback: function(value: any) {
+        callback: (tickValue: number | string) => {
+          const value = Number(tickValue);
           return (value / 1e9).toFixed(2) + ' GH/s';
         },
       },
@@ -93,9 +96,9 @@ const options = {
       mode: 'index' as const,
       intersect: false,
       callbacks: {
-        label: function(context: any) {
-          const value = context.raw.y;
-          return `Hashrate: ${(value / 1e9).toFixed(2)} GH/s`;
+        label: function(context: TooltipItem<'line'>): string {
+          const value = context.raw as { x: number; y: number };
+          return `Hashrate: ${(value.y / 1e9).toFixed(2)} GH/s`;
         },
       },
     },
