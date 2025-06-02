@@ -8,9 +8,9 @@ export default function Home() {
         <Image 
           src="/kaspa-logo.svg" 
           alt="Kaspa Logo" 
-          className="h-10 sm:h-12 w-auto" 
-          width={48}
-          height={48}
+          className="h-12 sm:h-16 w-auto" 
+          width={64}
+          height={64}
           priority
         />
         <h1 className="text-2xl sm:text-4xl font-bold">
