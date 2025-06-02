@@ -263,35 +263,32 @@ export default function HashrateChart() {
   return (
     <div className="w-full h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 px-2">
-        <div className="flex items-center gap-4">
-          {/* <span className="text-gray-400 text-sm">Hold Shift to pan</span> */}
-          <button
-            onClick={() => setIsLogScale(!isLogScale)}
-            className={`text-white px-4 py-2 rounded-lg transition-colors ${
-              isLogScale ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
-            }`}
-          >
-            lg
-          </button>
-          <div className="flex items-center gap-2">
-            {dateRanges.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => {
-                  setDateRange(range.value);
-                  if (chartRef.current) {
-                    chartRef.current.resetZoom();
-                  }
-                }}
-                className={`text-white px-4 py-2 rounded-lg transition-colors ${
-                  dateRange === range.value ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2">
+          {dateRanges.map((range) => (
+            <button
+              key={range.value}
+              onClick={() => {
+                setDateRange(range.value);
+                if (chartRef.current) {
+                  chartRef.current.resetZoom();
+                }
+              }}
+              className={`text-white px-4 py-2 rounded-lg transition-colors ${
+                dateRange === range.value ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
+              }`}
+            >
+              {range.label}
+            </button>
+          ))}
         </div>
+        <button
+          onClick={() => setIsLogScale(!isLogScale)}
+          className={`text-white px-4 py-2 rounded-lg transition-colors ${
+            isLogScale ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
+          }`}
+        >
+          lg
+        </button>
       </div>
       <div className="flex-1">
         <Line
