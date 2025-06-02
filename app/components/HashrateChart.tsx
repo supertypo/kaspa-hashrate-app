@@ -13,13 +13,16 @@ import {
   TimeScale,
   TooltipItem,
   ChartOptions,
+  LogarithmicScale,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
+import { format, subDays, subHours, subMonths, subWeeks } from 'date-fns';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  LogarithmicScale,
   PointElement,
   LineElement,
   Title,
@@ -34,7 +37,7 @@ interface HashrateData {
   date_time: string;
 }
 
-const options: ChartOptions<'line'> = {
+const baseOptions = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: {
@@ -51,11 +54,17 @@ const options: ChartOptions<'line'> = {
   },
   scales: {
     x: {
-      type: 'linear' as const,
+      type: 'time' as const,
+      time: {
+        unit: 'hour' as const,
+        displayFormats: {
+          hour: 'MMM d, HH:mm'
+        }
+      },
       display: true,
       title: {
         display: true,
-        text: 'DAA Score',
+        text: 'Time',
         color: '#fff',
         padding: { top: 10 }
       },
@@ -64,28 +73,10 @@ const options: ChartOptions<'line'> = {
       },
       ticks: {
         color: '#fff',
+        maxRotation: 45,
+        minRotation: 45
       },
-    },
-    y: {
-      type: 'linear' as const,
-      display: true,
-      title: {
-        display: true,
-        text: 'Hashrate (KH/s)',
-        color: '#fff',
-        padding: { bottom: 10 }
-      },
-      grid: {
-        color: 'rgba(255, 255, 255, 0.1)',
-      },
-      ticks: {
-        color: '#fff',
-        callback: (tickValue: number | string) => {
-          const value = Number(tickValue);
-          return (value / 1e9).toFixed(2) + ' GH/s';
-        },
-      },
-    },
+    }
   },
   plugins: {
     legend: {
@@ -97,24 +88,76 @@ const options: ChartOptions<'line'> = {
     },
     title: {
       display: false
-    },
-    tooltip: {
-      mode: 'index' as const,
-      intersect: false,
-      callbacks: {
-        label: function(context: TooltipItem<'line'>): string {
-          const value = context.raw as { x: number; y: number };
-          return `Hashrate: ${(value.y / 1e9).toFixed(2)} GH/s`;
-        },
-      },
-    },
+    }
   },
 };
+
+const dateRanges = [
+  { label: '24 Hours', value: '24h', getFn: (date: Date) => subHours(date, 24) },
+  { label: '7 Days', value: '7d', getFn: (date: Date) => subDays(date, 7) },
+  { label: '30 Days', value: '30d', getFn: (date: Date) => subDays(date, 30) },
+  { label: '3 Months', value: '3m', getFn: (date: Date) => subMonths(date, 3) },
+  { label: '6 Months', value: '6m', getFn: (date: Date) => subMonths(date, 6) },
+  { label: '1 Year', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
+  { label: '2 Years', value: '2y', getFn: (date: Date) => subMonths(date, 24) },
+  { label: '3 Years', value: '3y', getFn: (date: Date) => subMonths(date, 36) },
+  { label: 'All', value: 'all', getFn: (date: Date) => new Date(0) }
+];
 
 export default function HashrateChart() {
   const [data, setData] = useState<HashrateData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLogScale, setIsLogScale] = useState(false);
+  const [dateRange, setDateRange] = useState('7d');
+
+  const chartOptions: ChartOptions<'line'> = {
+    ...baseOptions,
+    scales: {
+      ...baseOptions.scales,
+      y: {
+        type: isLogScale ? 'logarithmic' : 'linear',
+        display: true,
+        title: {
+          display: true,
+          text: 'Hashrate (KH/s)',
+          color: '#fff',
+          padding: { bottom: 10 }
+        },
+        grid: {
+          color: 'rgba(255, 255, 255, 0.1)',
+        },
+        ticks: {
+          color: '#fff',
+          callback: (tickValue: number | string) => {
+            const value = Number(tickValue);
+            return (value / 1e9).toFixed(2) + ' GH/s';
+          },
+        },
+      },
+    },
+    plugins: {
+      ...baseOptions.plugins,
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+        callbacks: {
+          title: (context) => {
+            const date = new Date(context[0].parsed.x);
+            return format(date, 'PPpp');
+          },
+          label: function(context: TooltipItem<'line'>): string[] {
+            const dataIndex = context.dataIndex;
+            const dataPoint = data[dataIndex];
+            return [
+              `Hashrate: ${(dataPoint.hashrate_kh / 1e9).toFixed(2)} GH/s`,
+              `DAA Score: ${dataPoint.daaScore.toLocaleString()}`
+            ];
+          },
+        },
+      },
+    },
+  };
 
   useEffect(() => {
     fetch('https://api.kaspa.org/info/hashrate/history')
@@ -133,6 +176,14 @@ export default function HashrateChart() {
         setLoading(false);
       });
   }, []);
+
+  const filteredData = data.filter(item => {
+    const itemDate = new Date(item.date_time);
+    const selectedRange = dateRanges.find(r => r.value === dateRange);
+    if (!selectedRange) return true;
+    const startDate = selectedRange.getFn(new Date());
+    return itemDate >= startDate;
+  });
 
   if (loading) {
     return (
@@ -154,8 +205,8 @@ export default function HashrateChart() {
     datasets: [
       {
         label: 'Network Hashrate',
-        data: data.map((item) => ({
-          x: item.daaScore,
+        data: filteredData.map((item) => ({
+          x: new Date(item.date_time).getTime(),
           y: item.hashrate_kh,
         })),
         borderColor: '#6366f1',
@@ -168,8 +219,35 @@ export default function HashrateChart() {
   };
 
   return (
-    <div className="w-full h-full">
-      <Line options={options} data={chartData} />
+    <div className="w-full h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setIsLogScale(!isLogScale)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              isLogScale
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+            }`}
+          >
+            {isLogScale ? 'Logarithmic' : 'Linear'} Scale
+          </button>
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value)}
+            className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+          >
+            {dateRanges.map((range) => (
+              <option key={range.value} value={range.value}>
+                {range.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="flex-1">
+        <Line options={chartOptions} data={chartData} />
+      </div>
     </div>
   );
 }
