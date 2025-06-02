@@ -41,6 +41,14 @@ const options: ChartOptions<'line'> = {
     mode: 'index' as const,
     intersect: false,
   },
+  layout: {
+    padding: {
+      left: 10,
+      right: 20,
+      top: 0,
+      bottom: 10
+    }
+  },
   scales: {
     x: {
       type: 'linear' as const,
@@ -49,6 +57,7 @@ const options: ChartOptions<'line'> = {
         display: true,
         text: 'DAA Score',
         color: '#fff',
+        padding: { top: 10 }
       },
       grid: {
         color: 'rgba(255, 255, 255, 0.1)',
@@ -64,6 +73,7 @@ const options: ChartOptions<'line'> = {
         display: true,
         text: 'Hashrate (KH/s)',
         color: '#fff',
+        padding: { bottom: 10 }
       },
       grid: {
         color: 'rgba(255, 255, 255, 0.1)',
@@ -82,15 +92,11 @@ const options: ChartOptions<'line'> = {
       position: 'top' as const,
       labels: {
         color: '#fff',
+        padding: 20
       },
     },
     title: {
-      display: true,
-      text: 'Kaspa Network Hashrate',
-      color: '#fff',
-      font: {
-        size: 16,
-      },
+      display: false
     },
     tooltip: {
       mode: 'index' as const,
@@ -130,7 +136,7 @@ export default function HashrateChart() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[600px]">
+      <div className="flex items-center justify-center w-full h-full">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
       </div>
     );
@@ -138,7 +144,7 @@ export default function HashrateChart() {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-[600px] text-red-400">
+      <div className="flex items-center justify-center w-full h-full text-red-400">
         Error loading data: {error}
       </div>
     );
@@ -162,7 +168,7 @@ export default function HashrateChart() {
   };
 
   return (
-    <div className="w-full h-[600px] p-4">
+    <div className="w-full h-full">
       <Line options={options} data={chartData} />
     </div>
   );
