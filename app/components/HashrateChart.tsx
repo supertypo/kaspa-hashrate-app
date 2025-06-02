@@ -9,7 +9,7 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend,
+
   TimeScale,
   TooltipItem,
   ChartOptions,
@@ -28,7 +28,6 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend,
   TimeScale
 );
 
@@ -148,11 +147,7 @@ export default function HashrateChart() {
     },
     plugins: {
       legend: {
-        position: 'top' as const,
-        labels: {
-          color: '#fff',
-          padding: 20
-        },
+        display: false
       },
       zoom: zoomPlugin ? {
         pan: {
