@@ -218,12 +218,8 @@ export default function HashrateChart() {
       switch (dateRange) {
         case '30d':
           return '3h';
-        case '1y':
-          return '1d';
-        case 'all':
-          return '7d';
         default:
-          return '7d';
+          return '1d';
       }
     };
 
