@@ -214,7 +214,20 @@ export default function HashrateChart() {
   };
 
   useEffect(() => {
-    fetch('https://api.kaspa.org/info/hashrate/history')
+    const getResolution = () => {
+      switch (dateRange) {
+        case '30d':
+          return '3h';
+        case '1y':
+          return '1d';
+        case 'all':
+          return '7d';
+        default:
+          return '7d';
+      }
+    };
+
+    fetch(`https://api.kaspa.org/info/hashrate/history?resolution=${getResolution()}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Network response was not ok');
@@ -229,7 +242,7 @@ export default function HashrateChart() {
         setError(err.message);
         setLoading(false);
       });
-  }, []);
+  }, [dateRange]);
 
   const filteredData = data.filter(item => {
     const itemDate = new Date(item.date_time);
