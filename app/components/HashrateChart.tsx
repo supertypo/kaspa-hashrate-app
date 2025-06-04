@@ -292,8 +292,8 @@ export default function HashrateChart() {
           x: new Date(item.date_time).getTime(),
           y: item.hashrate_kh,
         })),
-        borderColor: '#6366f1',
-        backgroundColor: 'rgba(99, 102, 241, 0.5)',
+        borderColor: '#6fc7ba',
+        backgroundColor: 'rgba(111, 199, 186, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         hitRadius: 30,
@@ -317,7 +317,7 @@ export default function HashrateChart() {
                 }
               }}
               className={`text-white px-4 py-2 rounded-lg transition-colors ${
-                dateRange === range.value ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
+                dateRange === range.value ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
               }`}
             >
               {range.label}
@@ -331,7 +331,7 @@ export default function HashrateChart() {
             setIsLogScale(newValue);
           }}
           className={`text-white px-4 py-2 rounded-lg transition-colors ${
-            isLogScale ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
+            isLogScale ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
           }`}
         >
           lg
