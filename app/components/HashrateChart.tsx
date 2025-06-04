@@ -86,7 +86,19 @@ export default function HashrateChart() {
     });
   }, []);
 
-
+  useEffect(() => {
+    // Load saved preferences from localStorage
+    const savedDateRange = localStorage.getItem('kaspa-chart-dateRange');
+    const savedIsLogScale = localStorage.getItem('kaspa-chart-isLogScale');
+    
+    if (savedDateRange && dateRanges.some(range => range.value === savedDateRange)) {
+      setDateRange(savedDateRange);
+    }
+    
+    if (savedIsLogScale !== null) {
+      setIsLogScale(savedIsLogScale === 'true');
+    }
+  }, []);
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -298,6 +310,7 @@ export default function HashrateChart() {
             <button
               key={range.value}
               onClick={() => {
+                localStorage.setItem('kaspa-chart-dateRange', range.value);
                 setDateRange(range.value);
                 if (chartRef.current) {
                   chartRef.current.resetZoom();
@@ -312,7 +325,11 @@ export default function HashrateChart() {
           ))}
         </div>
         <button
-          onClick={() => setIsLogScale(!isLogScale)}
+          onClick={() => {
+            const newValue = !isLogScale;
+            localStorage.setItem('kaspa-chart-isLogScale', String(newValue));
+            setIsLogScale(newValue);
+          }}
           className={`text-white px-4 py-2 rounded-lg transition-colors ${
             isLogScale ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-700 hover:bg-gray-600'
           }`}
