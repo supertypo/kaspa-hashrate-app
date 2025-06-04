@@ -51,6 +51,7 @@ function formatHashrate(hashrate: number): string {
 }
 
 const dateRanges = [
+  { label: '7d', value: '7d', getFn: (date: Date) => subDays(date, 7) },
   { label: '30d', value: '30d', getFn: (date: Date) => subDays(date, 30) },
   { label: '1y', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
   { label: 'All', value: 'all', getFn: () => new Date(0) }
@@ -216,6 +217,8 @@ export default function HashrateChart() {
   useEffect(() => {
     const getResolution = () => {
       switch (dateRange) {
+        case '7d':
+          return null;
         case '30d':
           return '3h';
         default:
@@ -223,7 +226,12 @@ export default function HashrateChart() {
       }
     };
 
-    fetch(`https://api.kaspa.org/info/hashrate/history?resolution=${getResolution()}`)
+    const resolution = getResolution();
+    const url = resolution !== null 
+      ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
+      : 'https://api.kaspa.org/info/hashrate/history';
+      
+    fetch(url)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Network response was not ok');
