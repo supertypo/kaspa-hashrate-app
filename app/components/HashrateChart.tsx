@@ -198,7 +198,7 @@ export default function HashrateChart() {
         callbacks: {
           title: (context) => {
             const date = new Date(context[0].parsed.x);
-            return format(date, 'PPpp');
+            return format(date, "yyyy-MM-dd HH:mm 'UTC'");
           },
           label: function(context: TooltipItem<'line'>): string[] {
             const dataIndex = context.dataIndex;
