@@ -317,7 +317,6 @@ export default function HashrateChart() {
             <button
               key={range.value}
               onClick={() => {
-                setLoading(true);
                 const newRange = range.value;
                 const getResolution = (range: string) => {
                   switch (range) {
@@ -353,7 +352,6 @@ export default function HashrateChart() {
                   })
                   .catch((err) => {
                     setError(err.message);
-                    setLoading(false);
                   });
               }}
               className={`text-white px-4 py-2 rounded-lg transition-colors ${
