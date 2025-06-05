@@ -160,7 +160,6 @@ export default function HashrateChart() {
   const [isMobile, setIsMobile] = useState(false);
   const chartRef = useRef<ChartJS<"line">>(null);
   const [zoomPlugin, setZoomPlugin] = useState<typeof import('chartjs-plugin-zoom').default | null>(null);
-  const [targetDateRange, setTargetDateRange] = useState<string | null>(null);
   const [pendingRange, setPendingRange] = useState<string | null>(null);
   const [newData, setNewData] = useState<HashrateData[] | null>(null);
 
@@ -374,9 +373,7 @@ export default function HashrateChart() {
 
   const filteredData = data.filter(item => {
     const itemDate = new Date(item.date_time);
-    // Use target range if it exists (during loading), otherwise use current range
-    const rangeToUse = targetDateRange || dateRange;
-    const selectedRange = dateRanges.find(r => r.value === rangeToUse);
+    const selectedRange = dateRanges.find(r => r.value === dateRange);
     if (!selectedRange) return true;
     const startDate = selectedRange.getFn(new Date());
     return itemDate >= startDate;
