@@ -37,6 +37,90 @@ interface HashrateData {
   date_time: string;
 }
 
+// Slim version of the data for storage
+interface SlimHashrateData {
+  d: number;  // daaScore
+  t: number;  // timestamp in epoch millis
+  h: number;  // hashrate
+}
+
+interface CacheEntry {
+  data: SlimHashrateData[];
+  timestamp: number;
+}
+
+function slimDownData(data: HashrateData[]): SlimHashrateData[] {
+  return data.map(item => ({
+    d: item.daaScore,
+    t: new Date(item.date_time).getTime(),
+    h: item.hashrate_kh
+  }));
+}
+
+function expandData(data: SlimHashrateData[]): HashrateData[] {
+  return data.map(item => ({
+    daaScore: item.d,
+    date_time: new Date(item.t).toISOString(),
+    hashrate_kh: item.h
+  }));
+}
+
+function getCachedData(url: string): HashrateData[] | null {
+  try {
+    const cacheEntry = localStorage.getItem(`kaspa-cache-${url}`);
+    if (!cacheEntry) return null;
+
+    const { data, timestamp }: CacheEntry = JSON.parse(cacheEntry);
+    const now = Date.now();
+    const expiryTime = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+    if (now - timestamp > expiryTime) {
+      try {
+        localStorage.removeItem(`kaspa-cache-${url}`);
+      } catch (e) {
+        console.warn('Failed to remove expired cache entry', e);
+      }
+      return null;
+    }
+
+    return expandData(data);
+  } catch (e) {
+    console.warn('Failed to read from cache', e);
+    return null;
+  }
+}
+
+function setCachedData(url: string, data: HashrateData[]) {
+  try {
+    const cacheEntry: CacheEntry = {
+      data: slimDownData(data),
+      timestamp: Date.now()
+    };
+    localStorage.setItem(`kaspa-cache-${url}`, JSON.stringify(cacheEntry));
+  } catch (e) {
+    console.warn('Failed to write to cache', e);
+  }
+}
+
+function fetchWithCache(url: string): Promise<HashrateData[]> {
+  const cachedData = getCachedData(url);
+  if (cachedData) {
+    return Promise.resolve(cachedData);
+  }
+
+  return fetch(url)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return response.json();
+    })
+    .then((data) => {
+      setCachedData(url, data);
+      return data;
+    });
+}
+
 function formatHashrate(hashrate: number): string {
   const units = ['KH/s', 'MH/s', 'GH/s', 'TH/s', 'PH/s', 'EH/s'];
   let value = hashrate;
@@ -57,6 +141,16 @@ const dateRanges = [
   { label: 'All', value: 'all', getFn: () => new Date(0) }
 ];
 
+function isTimeWindowIncrease(currentRange: string, newRange: string): boolean {
+  const rangeSizes: { [key: string]: number } = {
+    '7d': 1,
+    '30d': 2,
+    '1y': 3,
+    'all': 4
+  };
+  return (rangeSizes[newRange] || 0) > (rangeSizes[currentRange] || 0);
+}
+
 export default function HashrateChart() {
   const [data, setData] = useState<HashrateData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +160,9 @@ export default function HashrateChart() {
   const [isMobile, setIsMobile] = useState(false);
   const chartRef = useRef<ChartJS<"line">>(null);
   const [zoomPlugin, setZoomPlugin] = useState<typeof import('chartjs-plugin-zoom').default | null>(null);
+  const [targetDateRange, setTargetDateRange] = useState<string | null>(null);
+  const [pendingRange, setPendingRange] = useState<string | null>(null);
+  const [newData, setNewData] = useState<HashrateData[] | null>(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -99,6 +196,20 @@ export default function HashrateChart() {
       setIsLogScale(savedIsLogScale === 'true');
     }
   }, []);
+
+  // Effect to handle range changes after data is ready
+  useEffect(() => {
+    if (pendingRange && newData) {
+      setData(newData);
+      localStorage.setItem('kaspa-chart-dateRange', pendingRange);
+      setDateRange(pendingRange);
+      if (chartRef.current) {
+        chartRef.current.resetZoom();
+      }
+      setPendingRange(null);
+      setNewData(null);
+    }
+  }, [pendingRange, newData]);
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
@@ -250,13 +361,7 @@ export default function HashrateChart() {
       ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
       : 'https://api.kaspa.org/info/hashrate/history';
 
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        return response.json();
-      })
+    fetchWithCache(url)
       .then((rawData) => {
         setData(rawData);
         setLoading(false);
@@ -269,7 +374,9 @@ export default function HashrateChart() {
 
   const filteredData = data.filter(item => {
     const itemDate = new Date(item.date_time);
-    const selectedRange = dateRanges.find(r => r.value === dateRange);
+    // Use target range if it exists (during loading), otherwise use current range
+    const rangeToUse = targetDateRange || dateRange;
+    const selectedRange = dateRanges.find(r => r.value === rangeToUse);
     if (!selectedRange) return true;
     const startDate = selectedRange.getFn(new Date());
     return itemDate >= startDate;
@@ -333,26 +440,35 @@ export default function HashrateChart() {
                 const url = resolution !== null 
                   ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
                   : 'https://api.kaspa.org/info/hashrate/history';
+
+                const increasing = isTimeWindowIncrease(dateRange, newRange);
                 
-                fetch(url)
-                  .then((response) => {
-                    if (!response.ok) {
-                      throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                  })
-                  .then((rawData) => {
-                    setData(rawData);
-                    setLoading(false);
-                    localStorage.setItem('kaspa-chart-dateRange', newRange);
-                    setDateRange(newRange);
-                    if (chartRef.current) {
-                      chartRef.current.resetZoom();
-                    }
-                  })
-                  .catch((err) => {
-                    setError(err.message);
-                  });
+                if (increasing) {
+                  // For increasing window: load data first, then change scale
+                  fetchWithCache(url)
+                    .then((rawData) => {
+                      setNewData(rawData);
+                      setPendingRange(newRange);
+                    })
+                    .catch((err) => {
+                      console.error('Error fetching data:', err);
+                    });
+                } else {
+                  // For decreasing window: change scale first, then load data
+                  localStorage.setItem('kaspa-chart-dateRange', newRange);
+                  setDateRange(newRange);
+                  if (chartRef.current) {
+                    chartRef.current.resetZoom();
+                  }
+                  
+                  fetchWithCache(url)
+                    .then((rawData) => {
+                      setData(rawData);
+                    })
+                    .catch((err) => {
+                      console.error('Error fetching data:', err);
+                    });
+                }
               }}
               className={`text-white px-4 py-2 rounded-lg transition-colors ${
                 dateRange === range.value ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
