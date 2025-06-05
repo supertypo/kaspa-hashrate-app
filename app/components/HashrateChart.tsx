@@ -226,9 +226,10 @@ export default function HashrateChart() {
     },
   };
 
+  // Initial data load
   useEffect(() => {
-    const getResolution = () => {
-      switch (dateRange) {
+    const getResolution = (range: string) => {
+      switch (range) {
         case '7d':
           return null;
         case '30d':
@@ -238,11 +239,17 @@ export default function HashrateChart() {
       }
     };
 
-    const resolution = getResolution();
+    // Get saved date range
+    const savedDateRange = localStorage.getItem('kaspa-chart-dateRange');
+    const initialRange = savedDateRange && dateRanges.some(range => range.value === savedDateRange)
+      ? savedDateRange
+      : 'all';
+
+    const resolution = getResolution(initialRange);
     const url = resolution !== null 
       ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
       : 'https://api.kaspa.org/info/hashrate/history';
-      
+
     fetch(url)
       .then((response) => {
         if (!response.ok) {
@@ -258,7 +265,7 @@ export default function HashrateChart() {
         setError(err.message);
         setLoading(false);
       });
-  }, [dateRange]);
+  }, []);
 
   const filteredData = data.filter(item => {
     const itemDate = new Date(item.date_time);
@@ -310,11 +317,44 @@ export default function HashrateChart() {
             <button
               key={range.value}
               onClick={() => {
-                localStorage.setItem('kaspa-chart-dateRange', range.value);
-                setDateRange(range.value);
-                if (chartRef.current) {
-                  chartRef.current.resetZoom();
-                }
+                setLoading(true);
+                const newRange = range.value;
+                const getResolution = (range: string) => {
+                  switch (range) {
+                    case '7d':
+                      return null;
+                    case '30d':
+                      return '3h';
+                    default:
+                      return '1d';
+                  }
+                };
+
+                const resolution = getResolution(newRange);
+                const url = resolution !== null 
+                  ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
+                  : 'https://api.kaspa.org/info/hashrate/history';
+                
+                fetch(url)
+                  .then((response) => {
+                    if (!response.ok) {
+                      throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                  })
+                  .then((rawData) => {
+                    setData(rawData);
+                    setLoading(false);
+                    localStorage.setItem('kaspa-chart-dateRange', newRange);
+                    setDateRange(newRange);
+                    if (chartRef.current) {
+                      chartRef.current.resetZoom();
+                    }
+                  })
+                  .catch((err) => {
+                    setError(err.message);
+                    setLoading(false);
+                  });
               }}
               className={`text-white px-4 py-2 rounded-lg transition-colors ${
                 dateRange === range.value ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
