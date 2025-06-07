@@ -25,3 +25,7 @@ body {
   background: rgb(var(--background-start-rgb));
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.navigator-container > canvas {
+  width: 100% !important;
+}

@@ -16,8 +16,9 @@ import {
   LogarithmicScale,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { format } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import 'chartjs-adapter-date-fns';
-import { format, subDays, subMonths } from 'date-fns';
 
 // Register required ChartJS components
 ChartJS.register(
@@ -30,6 +31,9 @@ ChartJS.register(
   Tooltip,
   TimeScale
 );
+
+// Configure Chart.js defaults
+ChartJS.defaults.locale = 'en-US';
 
 interface HashrateData {
   daaScore: number;
@@ -65,9 +69,10 @@ function expandData(data: SlimHashrateData[]): HashrateData[] {
   }));
 }
 
-function getCachedData(url: string): HashrateData[] | null {
+function getCachedData(resolution: string | null): HashrateData[] | null {
   try {
-    const cacheEntry = localStorage.getItem(`kaspa-cache-${url}`);
+    const cacheKey = `kaspa-cache-${resolution || 'full'}`;
+    const cacheEntry = localStorage.getItem(cacheKey);
     if (!cacheEntry) return null;
 
     const { data, timestamp }: CacheEntry = JSON.parse(cacheEntry);
@@ -76,7 +81,7 @@ function getCachedData(url: string): HashrateData[] | null {
 
     if (now - timestamp > expiryTime) {
       try {
-        localStorage.removeItem(`kaspa-cache-${url}`);
+        localStorage.removeItem(cacheKey);
       } catch (e) {
         console.warn('Failed to remove expired cache entry', e);
       }
@@ -90,23 +95,27 @@ function getCachedData(url: string): HashrateData[] | null {
   }
 }
 
-function setCachedData(url: string, data: HashrateData[]) {
+function setCachedData(resolution: string | null, data: HashrateData[]) {
   try {
     const cacheEntry: CacheEntry = {
       data: slimDownData(data),
       timestamp: Date.now()
     };
-    localStorage.setItem(`kaspa-cache-${url}`, JSON.stringify(cacheEntry));
+    localStorage.setItem(`kaspa-cache-${resolution || 'full'}`, JSON.stringify(cacheEntry));
   } catch (e) {
     console.warn('Failed to write to cache', e);
   }
 }
 
-function fetchWithCache(url: string): Promise<HashrateData[]> {
-  const cachedData = getCachedData(url);
+function fetchWithCache(resolution: string | null): Promise<HashrateData[]> {
+  const cachedData = getCachedData(resolution);
   if (cachedData) {
     return Promise.resolve(cachedData);
   }
+
+  const url = resolution 
+    ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
+    : 'https://api.kaspa.org/info/hashrate/history';
 
   return fetch(url)
     .then((response) => {
@@ -116,7 +125,11 @@ function fetchWithCache(url: string): Promise<HashrateData[]> {
       return response.json();
     })
     .then((data) => {
-      setCachedData(url, data);
+      try {
+        setCachedData(resolution, data);
+      } catch (e) {
+        console.warn('Failed to cache data:', e);
+      }
       return data;
     });
 }
@@ -134,34 +147,36 @@ function formatHashrate(hashrate: number): string {
   return `${value.toFixed(2)} ${units[unitIndex]}`;
 }
 
-const dateRanges = [
-  { label: '7d', value: '7d', getFn: (date: Date) => subDays(date, 7) },
-  { label: '30d', value: '30d', getFn: (date: Date) => subDays(date, 30) },
-  { label: '1y', value: '1y', getFn: (date: Date) => subMonths(date, 12) },
-  { label: 'All', value: 'all', getFn: () => new Date(0) }
-];
-
-function isTimeWindowIncrease(currentRange: string, newRange: string): boolean {
-  const rangeSizes: { [key: string]: number } = {
-    '7d': 1,
-    '30d': 2,
-    '1y': 3,
-    'all': 4
-  };
-  return (rangeSizes[newRange] || 0) > (rangeSizes[currentRange] || 0);
+// Helper function to determine the API resolution based on time window
+function getResolutionForRange(start: Date, end: Date): string | null {
+  const rangeDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  if (rangeDays <= 14) {
+    return null;  // full resolution
+  } else if (rangeDays <= 60) {
+    return '3h';
+  } else {
+    return '1d';
+  }
 }
 
-export default function HashrateChart() {
+interface HashrateChartProps {
+  isLogScale: boolean;
+}
+
+export default function HashrateChart({ isLogScale }: HashrateChartProps) {
+  // Main chart data with dynamic resolution
   const [data, setData] = useState<HashrateData[]>([]);
+  // Navigator chart data always at 1d resolution
+  const [navData, setNavData] = useState<HashrateData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isLogScale, setIsLogScale] = useState(false);
-  const [dateRange, setDateRange] = useState('all');
+  // isLogScale is now passed as a prop
   const [isMobile, setIsMobile] = useState(false);
-  const chartRef = useRef<ChartJS<"line">>(null);
-  const [zoomPlugin, setZoomPlugin] = useState<typeof import('chartjs-plugin-zoom').default | null>(null);
-  const [pendingRange, setPendingRange] = useState<string | null>(null);
-  const [newData, setNewData] = useState<HashrateData[] | null>(null);
+  const mainChartRef = useRef<ChartJS<"line">>(null);
+  const navigatorRef = useRef<ChartJS<"line">>(null);
+  const [selectedRange, setSelectedRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [isDragging, setIsDragging] = useState<'start' | 'end' | 'both' | null>(null);
+  const dragStartRef = useRef<{ x: number; range: { start: Date; end: Date } } | null>(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -174,47 +189,130 @@ export default function HashrateChart() {
   }, []);
 
   useEffect(() => {
-    // Dynamically import zoom plugin on client side
-    import('chartjs-plugin-zoom').then((module) => {
-      const plugin = module.default;
-      ChartJS.register(plugin);
-      setZoomPlugin(plugin);
+    // Log scale is now handled by parent component
+
+    // Load initial data for navigator (always 1d resolution)
+    setLoading(true);
+    setError(null);  // Clear any previous errors
+    
+    console.log('Fetching navigator data...');
+    fetchWithCache('1d')
+      .then((rawData) => {
+        console.log('Received navigator data:', rawData.length, 'points');
+        if (!rawData || rawData.length === 0) {
+          throw new Error('No data returned from API');
+        }
+        
+        // Sort data by date to ensure correct order
+        const sortedData = [...rawData].sort((a, b) => 
+          new Date(a.date_time).getTime() - new Date(b.date_time).getTime()
+        );
+        
+        setNavData(sortedData);
+        
+        // Set initial range to the full available range
+        const firstDataPoint = new Date(sortedData[0].date_time);
+        const lastDataPoint = new Date(sortedData[sortedData.length - 1].date_time);
+        
+        console.log('Setting initial range to full data:', {
+          start: firstDataPoint.toISOString(),
+          end: lastDataPoint.toISOString()
+        });
+        
+        setSelectedRange({ start: firstDataPoint, end: lastDataPoint });
+        setLoading(false);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error('Error loading navigator data:', err);
+        setError(err.message || 'Failed to load data');
+        setLoading(false);
+        setNavData([]);
+      });
+  }, []);
+
+  // Effect to fetch main chart data when selected range changes
+  useEffect(() => {
+    if (!selectedRange) return;
+
+    const resolution = getResolutionForRange(selectedRange.start, selectedRange.end);
+    setLoading(true);
+    setError(null);  // Clear any previous errors
+    
+    console.log('Fetching main chart data...', {
+      resolution,
+      start: selectedRange.start.toISOString(),
+      end: selectedRange.end.toISOString()
     });
-  }, []);
 
-  useEffect(() => {
-    // Load saved preferences from localStorage
-    const savedDateRange = localStorage.getItem('kaspa-chart-dateRange');
-    const savedIsLogScale = localStorage.getItem('kaspa-chart-isLogScale');
-    
-    if (savedDateRange && dateRanges.some(range => range.value === savedDateRange)) {
-      setDateRange(savedDateRange);
-    }
-    
-    if (savedIsLogScale !== null) {
-      setIsLogScale(savedIsLogScale === 'true');
-    }
-  }, []);
+    fetchWithCache(resolution)
+      .then((rawData) => {
+        console.log('Received main chart data:', rawData.length, 'points');
+        if (!rawData || rawData.length === 0) {
+          throw new Error('No data returned from API');
+        }
 
-  // Effect to handle range changes after data is ready
-  useEffect(() => {
-    if (pendingRange && newData) {
-      setData(newData);
-      localStorage.setItem('kaspa-chart-dateRange', pendingRange);
-      setDateRange(pendingRange);
-      if (chartRef.current) {
-        chartRef.current.resetZoom();
-      }
-      setPendingRange(null);
-      setNewData(null);
+        // Sort data by date to ensure correct order
+        const sortedData = [...rawData].sort((a, b) => 
+          new Date(a.date_time).getTime() - new Date(b.date_time).getTime()
+        );
+
+        // Add a small buffer to the range to ensure we include boundary points
+        const rangeStart = new Date(selectedRange.start.getTime() - 300 * 1000); // 5 minute buffer
+        const rangeEnd = new Date(selectedRange.end.getTime() + 300 * 1000);
+
+        // Filter data to the selected range
+        const filteredData = sortedData.filter(item => {
+          const date = new Date(item.date_time);
+          return date >= rangeStart && date <= rangeEnd;
+        });
+
+        console.log('Filtered data points:', filteredData.length);
+
+        if (filteredData.length === 0) {
+          throw new Error(`No data available for selected range (${selectedRange.start.toISOString()} - ${selectedRange.end.toISOString()})`);
+        }
+
+        setData(filteredData);
+        setLoading(false);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error('Error loading main chart data:', err);
+        setError(err.message || 'Failed to load data');
+        setLoading(false);
+        setData([]);
+      });
+  }, [selectedRange]);
+
+  const baseTimeConfig = {
+    displayFormats: {
+      millisecond: 'HH:mm:ss.SSS',
+      second: 'HH:mm:ss',
+      minute: 'HH:mm',
+      hour: 'dd HH:mm',
+      day: 'MMM d',
+      week: 'MMM d',
+      month: 'MMM yyyy',
+      quarter: 'MMM yyyy',
+      year: 'yyyy'
     }
-  }, [pendingRange, newData]);
+  };
 
   const chartOptions: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,  // Disable default animations
+    transitions: {
+      active: {
+        animation: {
+          duration: 400,
+          easing: 'easeOutQuart'
+        }
+      }
+    },
     interaction: {
-      mode: 'nearest' as const,
+      mode: 'nearest',
       axis: 'x',
       intersect: true,
     },
@@ -228,20 +326,8 @@ export default function HashrateChart() {
     },
     scales: {
       x: {
-        type: 'time' as const,
-        time: {
-          displayFormats: {
-            millisecond: 'yyyy-MM-dd HH:mm:ss.SSS',
-            second: 'yyyy-MM-dd HH:mm:ss',
-            minute: 'yyyy-MM-dd HH:mm',
-            hour: 'yyyy-MM-dd HH:mm',
-            day: 'yyyy-MM-dd',
-            week: 'yyyy-MM-dd',
-            month: 'yyyy-MM-dd',
-            quarter: 'yyyy-MM-dd',
-            year: 'yyyy-MM-dd'
-          }
-        },
+        type: 'time',
+        time: baseTimeConfig,
         display: true,
         title: {
           display: true,
@@ -287,41 +373,13 @@ export default function HashrateChart() {
       legend: {
         display: false
       },
-      zoom: zoomPlugin ? {
-        pan: {
-          enabled: true,
-          mode: 'x',
-          modifierKey: 'shift', // Hold shift to pan
-        },
-        zoom: {
-          wheel: {
-            enabled: false,
-          },
-          pinch: {
-            enabled: true
-          },
-          mode: 'x',
-          drag: {
-            enabled: true,
-            modifierKey: undefined, // No modifier for zoom
-            backgroundColor: 'rgba(99, 102, 241, 0.3)',
-            borderColor: 'rgba(99, 102, 241, 0.8)',
-          },
-        },
-        limits: {
-          x: {
-            min: 'original',
-            max: 'original',
-          },
-        },
-      } : undefined,
       tooltip: {
-        mode: 'nearest' as const,
+        mode: 'nearest',
         intersect: true,
         callbacks: {
           title: (context) => {
             const date = new Date(context[0].parsed.x);
-            return format(date, "yyyy-MM-dd HH:mmXXX");
+            return format(date, "yyyy-MM-dd HH:mm'Z'", { locale: enUS });
           },
           label: function(context: TooltipItem<'line'>): string[] {
             const dataIndex = context.dataIndex;
@@ -336,164 +394,365 @@ export default function HashrateChart() {
     },
   };
 
-  // Initial data load
-  useEffect(() => {
-    const getResolution = (range: string) => {
-      switch (range) {
-        case '7d':
-          return null;
-        case '30d':
-          return '3h';
-        default:
-          return '1d';
-      }
-    };
-
-    // Get saved date range
-    const savedDateRange = localStorage.getItem('kaspa-chart-dateRange');
-    const initialRange = savedDateRange && dateRanges.some(range => range.value === savedDateRange)
-      ? savedDateRange
-      : 'all';
-
-    const resolution = getResolution(initialRange);
-    const url = resolution !== null 
-      ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
-      : 'https://api.kaspa.org/info/hashrate/history';
-
-    fetchWithCache(url)
-      .then((rawData) => {
-        setData(rawData);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
-
-  const filteredData = data.filter(item => {
-    const itemDate = new Date(item.date_time);
-    const selectedRange = dateRanges.find(r => r.value === dateRange);
-    if (!selectedRange) return true;
-    const startDate = selectedRange.getFn(new Date());
-    return itemDate >= startDate;
-  });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center w-full h-full">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center w-full h-full text-red-400">
-        Error loading data: {error}
-      </div>
-    );
-  }
-
-  const chartData = {
+  const mainChartData = {
     datasets: [
       {
         label: 'Network Hashrate',
-        data: filteredData.map((item) => ({
-          x: new Date(item.date_time).getTime(),
-          y: item.hashrate_kh,
-        })),
+        data: data.sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())
+          .map((item) => ({
+            x: new Date(item.date_time).getTime(),
+            y: item.hashrate_kh,
+          })),
         borderColor: '#6fc7ba',
         backgroundColor: 'rgba(111, 199, 186, 0.5)',
         borderWidth: 2,
         pointRadius: 0,
         hitRadius: 30,
         fill: true,
+        tension: 0.1,
+        spanGaps: true,
       },
     ],
   };
 
-  return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4 px-2">
-        <div className="flex items-center gap-2">
-          {dateRanges.map((range) => (
-            <button
-              key={range.value}
-              onClick={() => {
-                const newRange = range.value;
-                const getResolution = (range: string) => {
-                  switch (range) {
-                    case '7d':
-                      return null;
-                    case '30d':
-                      return '3h';
-                    default:
-                      return '1d';
-                  }
-                };
+  const navigatorChartData = {
+    datasets: [
+      {
+        label: 'Network Hashrate',
+        data: navData.sort((a, b) => new Date(a.date_time).getTime() - new Date(b.date_time).getTime())
+          .map((item) => ({
+            x: new Date(item.date_time).getTime(),
+            y: item.hashrate_kh,
+          })),
+        borderColor: '#6fc7ba',
+        backgroundColor: 'rgba(111, 199, 186, 0.2)',
+        borderWidth: 1,
+        pointRadius: 0,
+        hitRadius: 0,
+        fill: true,
+        tension: 0.1,
+        spanGaps: true,
+      },
+    ],
+  };
 
-                const resolution = getResolution(newRange);
-                const url = resolution !== null 
-                  ? `https://api.kaspa.org/info/hashrate/history?resolution=${resolution}`
-                  : 'https://api.kaspa.org/info/hashrate/history';
+  const navigatorStartTime = navData.length > 0 ? new Date(navData[0].date_time).getTime() : 0;
+  const navigatorEndTime = navData.length > 0 ? new Date(navData[navData.length - 1].date_time).getTime() : 0;
 
-                const increasing = isTimeWindowIncrease(dateRange, newRange);
-                
-                if (increasing) {
-                  // For increasing window: load data first, then change scale
-                  fetchWithCache(url)
-                    .then((rawData) => {
-                      setNewData(rawData);
-                      setPendingRange(newRange);
-                    })
-                    .catch((err) => {
-                      console.error('Error fetching data:', err);
-                    });
-                } else {
-                  // For decreasing window: change scale first, then load data
-                  localStorage.setItem('kaspa-chart-dateRange', newRange);
-                  setDateRange(newRange);
-                  if (chartRef.current) {
-                    chartRef.current.resetZoom();
-                  }
-                  
-                  fetchWithCache(url)
-                    .then((rawData) => {
-                      setData(rawData);
-                    })
-                    .catch((err) => {
-                      console.error('Error fetching data:', err);
-                    });
-                }
-              }}
-              className={`text-white px-4 py-2 rounded-lg transition-colors ${
-                dateRange === range.value ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-            >
-              {range.label}
-            </button>
-          ))}
+  const navigatorOptions: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: true,
+    aspectRatio: 8,
+    animation: false,
+    layout: {
+      padding: 0,
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        enabled: false,
+      },
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: baseTimeConfig,
+        display: true,
+        grid: {
+          display: false,
+        },
+        ticks: {
+          display: false,
+        },
+        min: navigatorStartTime || undefined,
+        max: navigatorEndTime || undefined,
+      },
+      y: {
+        type: isLogScale ? 'logarithmic' : 'linear',
+        display: false,
+        beginAtZero: false,
+        grid: {
+          display: false,
+        }
+      },
+    },
+  };
+
+  // We don't need this effect anymore since the initial data loading
+  // is handled by the navigator data loading effect and the selectedRange effect
+
+  useEffect(() => {
+    const handleDragMove = (e: MouseEvent) => {
+      if (!isDragging || !selectedRange || !navData.length) return;
+      
+      e.preventDefault();  // Prevent text selection
+      const container = document.querySelector('.navigator-container');
+      if (!container) return;
+      
+      const rect = container.getBoundingClientRect();
+      const dataStartTime = new Date(navData[0].date_time).getTime();
+      const dataEndTime = new Date(navData[navData.length - 1].date_time).getTime();
+      const totalDataRange = dataEndTime - dataStartTime;
+      
+      // Calculate position in the container (0 to 1), clamped to container bounds
+      const relativeX = Math.max(rect.left, Math.min(rect.right, e.clientX));
+      const position = (relativeX - rect.left) / rect.width;
+      const currentTime = dataStartTime + (position * totalDataRange);
+      
+      const minWindowSize = 1000 * 60 * 60; // Minimum 1 hour window
+      
+      if (isDragging === 'start') {
+        const newStartTime = Math.max(
+          dataStartTime,
+          Math.min(
+            currentTime,
+            selectedRange.end.getTime() - minWindowSize
+          )
+        );
+        setSelectedRange(prev => ({
+          start: new Date(newStartTime),
+          end: prev?.end ?? selectedRange.end
+        }));
+      } else if (isDragging === 'end') {
+        const newEndTime = Math.min(
+          dataEndTime,
+          Math.max(
+            currentTime,
+            selectedRange.start.getTime() + minWindowSize
+          )
+        );
+        setSelectedRange(prev => ({
+          start: prev?.start ?? selectedRange.start,
+          end: new Date(newEndTime)
+        }));
+      }
+    };
+
+    const handleDragEnd = () => {
+      setIsDragging(null);
+      dragStartRef.current = null;
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleDragMove);
+      window.addEventListener('mouseup', handleDragEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+    };
+  }, [isDragging, selectedRange, navData]);
+
+  const handleDragStart = (e: React.MouseEvent<HTMLDivElement>, type: 'start' | 'end') => {
+    if (!selectedRange) return;
+    e.preventDefault();
+    setIsDragging(type);
+    dragStartRef.current = {
+      x: e.clientX,
+      range: { ...selectedRange }
+    };
+  };
+
+
+
+  const handleNavigatorClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!navigatorRef.current || !selectedRange || !navData.length) return;
+    
+    // Ignore click if we're dragging
+    if (isDragging) return;
+
+    const chart = navigatorRef.current;
+    const rect = chart.canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const xPercent = x / rect.width;
+
+    const timeRange = selectedRange.end.getTime() - selectedRange.start.getTime();
+    const navigationStart = new Date(navData[0].date_time).getTime();
+    const navigationEnd = new Date(navData[navData.length - 1].date_time).getTime();
+    const totalTimeRange = navigationEnd - navigationStart;
+    const clickTime = navigationStart + (totalTimeRange * xPercent);
+
+    // Calculate the desired window position
+    const halfWindow = timeRange / 2;
+    let startTime = clickTime - halfWindow;
+    let endTime = clickTime + halfWindow;
+
+    // Adjust if we go beyond bounds
+    if (startTime < navigationStart) {
+      const shift = navigationStart - startTime;
+      startTime = navigationStart;
+      endTime = Math.min(navigationEnd, endTime + shift);
+    } else if (endTime > navigationEnd) {
+      const shift = endTime - navigationEnd;
+      endTime = navigationEnd;
+      startTime = Math.max(navigationStart, startTime - shift);
+    }
+
+    // Update the range
+    setSelectedRange({
+      start: new Date(startTime),
+      end: new Date(endTime),
+    });
+
+    // Update the window position, maintaining the current window size
+    const halfWindowSize = timeRange / 2;
+    let newStart = new Date(clickTime - halfWindowSize);
+    let newEnd = new Date(clickTime + halfWindowSize);
+
+    // Ensure we don't go out of bounds
+    if (newStart < new Date(navData[0].date_time)) {
+      newStart = new Date(navData[0].date_time);
+      newEnd = new Date(newStart.getTime() + timeRange);
+    }
+    if (newEnd > new Date(navData[navData.length - 1].date_time)) {
+      newEnd = new Date(navData[navData.length - 1].date_time);
+      newStart = new Date(newEnd.getTime() - timeRange);
+    }
+    
+    setSelectedRange({ start: newStart, end: newEnd });
+  };
+
+  const getHandlePosition = (type: 'start' | 'end') => {
+    if (!selectedRange || !navData.length) return '0%';
+    
+    const totalRange = new Date(navData[navData.length - 1].date_time).getTime() - new Date(navData[0].date_time).getTime();
+    const startTime = new Date(navData[0].date_time).getTime();
+    const dateToUse = type === 'start' ? selectedRange.start : selectedRange.end;
+    
+    return `${((dateToUse.getTime() - startTime) / totalRange) * 100}%`;
+  };
+
+  if (!navData.length) {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center w-full h-full">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
         </div>
-        <button
-          onClick={() => {
-            const newValue = !isLogScale;
-            localStorage.setItem('kaspa-chart-isLogScale', String(newValue));
-            setIsLogScale(newValue);
-          }}
-          className={`text-white px-4 py-2 rounded-lg transition-colors ${
-            isLogScale ? 'bg-teal-600 hover:bg-teal-500' : 'bg-gray-700 hover:bg-gray-600'
-          }`}
-        >
-          lg
-        </button>
+      );
+    }
+    if (error) {
+      return (
+        <div className="flex items-center justify-center w-full h-full">
+          <div className="text-red-500">Failed to load data: {error}</div>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center w-full h-full">
+        <div className="text-red-500">{error}</div>
       </div>
-      <div className="flex-1">
+    );
+  }
+
+  return (
+    <div className="w-full h-full flex flex-col gap-4">
+      <div className="flex-grow relative">
         <Line
-          ref={chartRef}
+          ref={mainChartRef}
+          data={mainChartData}
           options={chartOptions}
-          data={chartData}
         />
+      </div>
+      <div 
+        className="h-[60px] w-full relative select-none navigator-container"
+      >
+        <Line
+          ref={navigatorRef}
+          data={navigatorChartData}
+          options={navigatorOptions}
+          onClick={handleNavigatorClick}
+        />
+        <div className="absolute inset-0">
+          {selectedRange && navData.length > 0 && (
+            <>
+              {/* Selection overlay */}
+              <div
+                className="absolute top-0 h-full bg-[#6fc7ba33] pointer-events-none"
+                style={{
+                  left: getHandlePosition('start'),
+                  width: `${((selectedRange.end.getTime() - selectedRange.start.getTime()) /
+                    (new Date(navData[navData.length - 1].date_time).getTime() - new Date(navData[0].date_time).getTime())) * 100}%`
+                }}
+              />
+              {/* Left handle */}
+              <div
+                className="absolute top-0 w-2 h-full bg-[#6fc7ba] hover:bg-[#8fdfd3] cursor-ew-resize transform -translate-x-1/2"
+                style={{
+                  left: getHandlePosition('start')
+                }}
+                onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => handleDragStart(e, 'start')}
+              />
+              {/* Right handle */}
+              <div
+                className="absolute top-0 w-2 h-full bg-[#6fc7ba] hover:bg-[#8fdfd3] cursor-ew-resize transform -translate-x-1/2"
+                style={{
+                  left: getHandlePosition('end')
+                }}
+                onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => handleDragStart(e, 'end')}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="w-full h-full flex flex-col gap-4">
+      <div className="flex-grow relative">
+        <Line
+          ref={mainChartRef}
+          data={mainChartData}
+          options={chartOptions}
+        />
+      </div>
+      <div 
+        className="h-[60px] w-full relative select-none navigator-container"
+      >
+        <Line
+          ref={navigatorRef}
+          data={navigatorChartData}
+          options={navigatorOptions}
+          onClick={handleNavigatorClick}
+        />
+        <div className="absolute inset-0">
+          {selectedRange && navData.length > 0 && (
+            <>
+              {/* Selection overlay */}
+              <div
+                className="absolute top-0 h-full bg-[#6fc7ba33] pointer-events-none"
+                style={{
+                  left: getHandlePosition('start'),
+                  width: `${((selectedRange!.end.getTime() - selectedRange!.start.getTime()) /
+                    (new Date(navData[navData.length - 1].date_time).getTime() - new Date(navData[0].date_time).getTime())) * 100}%`
+                }}
+              />
+              {/* Left handle */}
+              <div
+                className="absolute top-0 w-2 h-full bg-[#6fc7ba] hover:bg-[#8fdfd3] cursor-ew-resize transform -translate-x-1/2"
+                style={{
+                  left: getHandlePosition('start')
+                }}
+                onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => handleDragStart(e, 'start')}
+              />
+              {/* Right handle */}
+              <div
+                className="absolute top-0 w-2 h-full bg-[#6fc7ba] hover:bg-[#8fdfd3] cursor-ew-resize transform -translate-x-1/2"
+                style={{
+                  left: getHandlePosition('end')
+                }}
+                onMouseDown={(e: React.MouseEvent<HTMLDivElement>) => handleDragStart(e, 'end')}
+              />
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
